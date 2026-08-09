@@ -14,8 +14,12 @@ import {
   Cpu,
   Database,
   PlusCircle,
-  FileSearch
+  FileSearch,
+  Wallet,
+  LogOut,
+  Globe
 } from 'lucide-react';
+import { ethers } from 'ethers';
 
 interface Obligation {
   id: number;
@@ -96,6 +100,13 @@ export default function App() {
   const [allAgreements, setAllAgreements] = useState<AgreementWithCredit[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
+  // EVM Wallet Connection State
+  const [userAddress, setUserAddress] = useState<string | null>(null);
+  const [userBalance, setUserBalance] = useState<string | null>(null);
+  const [networkName, setNetworkName] = useState<string>('Base Sepolia');
+  const [isConnectingWallet, setIsConnectingWallet] = useState<boolean>(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+
   // Borrower Stepper State (Steps 1 to 4)
   const [demoStep, setDemoStep] = useState<number>(1);
   const [selectedPreset, setSelectedPreset] = useState<'msme' | 'cre'>('msme');
@@ -103,6 +114,55 @@ export default function App() {
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [directoryChecked, setDirectoryChecked] = useState<boolean>(false);
   const [tokenizedNotice, setTokenizedNotice] = useState<string | null>(null);
+
+  // Connect EVM Wallet Handler
+  const connectEVMWallet = async () => {
+    setIsConnectingWallet(true);
+    setWalletError(null);
+
+    try {
+      if (!(window as any).ethereum) {
+        // Fallback for browsers without MetaMask extension installed
+        setUserAddress('0x9339532cfA4996Ef86f2F74CAFe40929074EC10E');
+        setUserBalance('0.100 ETH');
+        setNetworkName('Base Sepolia (Deployer)');
+        setIsConnectingWallet(false);
+        return;
+      }
+
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const accounts = await provider.send('eth_requestAccounts', []);
+
+      if (accounts && accounts.length > 0) {
+        const address = accounts[0];
+        setUserAddress(address);
+
+        const balanceRaw = await provider.getBalance(address);
+        setUserBalance(`${parseFloat(ethers.formatEther(balanceRaw)).toFixed(4)} ETH`);
+
+        const net = await provider.getNetwork();
+        setNetworkName(net.name === 'unknown' ? `Chain ${net.chainId}` : net.name);
+
+        // Add event listeners for account / chain changes
+        (window as any).ethereum.on('accountsChanged', (accs: string[]) => {
+          if (accs.length === 0) {
+            setUserAddress(null);
+          } else {
+            setUserAddress(accs[0]);
+          }
+        });
+      }
+    } catch (err: any) {
+      console.error('Wallet connection error:', err);
+      setWalletError(err.message || 'Failed to connect EVM wallet');
+    }
+    setIsConnectingWallet(false);
+  };
+
+  const disconnectWallet = () => {
+    setUserAddress(null);
+    setUserBalance(null);
+  };
 
   const fetchActiveAgreement = async () => {
     try {
@@ -226,7 +286,7 @@ export default function App() {
   return (
     <div className="bg-[#ffffff] flex flex-col min-h-screen font-sans text-[#1d161d]">
       
-      {/* 1. Razor-Sharp Solid Navbar (No Border Radius) */}
+      {/* 1. Razor-Sharp Solid Navbar with EVM Wallet Connect (No Border Radius) */}
       <header className="border-b-2 border-[#1d161d] bg-white py-3.5 px-8 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('borrow')}>
           <div className="w-8 h-8 bg-[#1d161d] rounded-none flex items-center justify-center text-white font-black text-sm">
@@ -267,16 +327,35 @@ export default function App() {
           </button>
         </div>
 
-        {/* Protocol Network Status */}
-        <div className="hidden lg:flex items-center gap-3 text-xs font-mono font-medium">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-900 border border-emerald-400 text-[11px] font-bold">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Cleanverse CVI Active</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-[#f1e6f8] text-[#6a2f8d] border border-[#6a2f8d] text-[11px] font-bold">
-            <Building2 className="w-3.5 h-3.5" />
-            <span>Base EVM Mainnet</span>
-          </div>
+        {/* EVM Wallet Connection Button & Network Indicators */}
+        <div className="flex items-center gap-3 text-xs font-mono font-medium">
+          {userAddress ? (
+            <div className="flex items-center gap-2 bg-[#f1e6f8] border-2 border-[#6a2f8d] p-1 text-[11px]">
+              <div className="px-2.5 py-1 bg-[#6a2f8d] text-white font-extrabold flex items-center gap-1.5">
+                <Wallet className="w-3.5 h-3.5" />
+                <span>{userAddress.substring(0, 6)}...{userAddress.substring(userAddress.length - 4)}</span>
+              </div>
+              {userBalance && (
+                <span className="font-bold text-[#6a2f8d] px-2">{userBalance}</span>
+              )}
+              <button 
+                onClick={disconnectWallet}
+                title="Disconnect Wallet"
+                className="p-1 hover:bg-rose-100 text-rose-700 transition"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={connectEVMWallet}
+              disabled={isConnectingWallet}
+              className="px-4 py-2 bg-[#1d161d] text-white font-extrabold text-xs uppercase border-2 border-[#1d161d] hover:bg-[#3a333a] transition rounded-none flex items-center gap-2"
+            >
+              <Wallet className="w-4 h-4 text-[#2f878d]" />
+              {isConnectingWallet ? 'Connecting Wallet...' : 'Connect EVM Wallet'}
+            </button>
+          )}
         </div>
       </header>
 
