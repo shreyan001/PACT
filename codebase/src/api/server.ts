@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { Redis } from '@upstash/redis';
 import { CleanverseClient } from '../cleanverse/client';
 import { ContractCreditEngine, LegalEventRecord } from '../engine/ContractCreditEngine';
 import { ReceivableEngine } from '../engine/ReceivableEngine';
@@ -16,6 +17,12 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3002;
 
+// Initialize Upstash Redis Client
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || 'https://merry-lamprey-178715.upstash.io',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || 'gQAAAAAAArobAAIgcDE4YjZhNTAyZTczYmM0Y2Q4YmJhYzUxZWJmZTcwOTY3Mg'
+});
+
 // Cleanverse Client Initialization
 const cleanverseClient = new CleanverseClient({
   baseUrl: process.env.CLEANVERSE_BASE_URL || 'https://uatapi.cleanverse.com/api/cooperate',
@@ -23,12 +30,8 @@ const cleanverseClient = new CleanverseClient({
   apiKeyBase64: process.env.CLEANVERSE_API_KEY || 'ZGVtb19hcGlfa2V5X3BhY3RfMjAyNl9jbGVhbnZlcnNlX3VhdF9zYW5kYm94'
 });
 
-// Seeded Agreement Hashes
-const SEEDED_MSME_HASH = ethers.keccak256(ethers.toUtf8Bytes('PACT-IN-1-SUPPLY-AGREEMENT-001'));
-const SEEDED_CRE_HASH = ethers.keccak256(ethers.toUtf8Bytes('PACT-CRE-2-COMMERCIAL-LEASE-002'));
-
 export interface AgreementStateStore {
-  scenarioKey: 'msme' | 'cre';
+  scenarioKey: 'msme' | 'cre' | 'custom';
   agreementId: string;
   agreementHash: string;
   title: string;
@@ -69,7 +72,7 @@ export interface AgreementStateStore {
 const msmeScenarioStore: AgreementStateStore = {
   scenarioKey: 'msme',
   agreementId: 'PACT-IN-001',
-  agreementHash: SEEDED_MSME_HASH,
+  agreementHash: ethers.keccak256(ethers.toUtf8Bytes('PACT-IN-1-SUPPLY-AGREEMENT-001')),
   title: 'Indian MSME Automotive Parts Supply Agreement',
   jurisdiction: 'India (IN)',
   legalWrapper: 'PACT-IN-1 (Factoring Regulation Act, Sec. 7)',
@@ -111,11 +114,11 @@ const msmeScenarioStore: AgreementStateStore = {
   ]
 };
 
-// Preset Scenario 2: Bangalore Commercial Real Estate Lease Tokenization
+// Preset Scenario 2: Bangalore Commercial CRE Lease Tokenization
 const creScenarioStore: AgreementStateStore = {
   scenarioKey: 'cre',
   agreementId: 'PACT-CRE-002',
-  agreementHash: SEEDED_CRE_HASH,
+  agreementHash: ethers.keccak256(ethers.toUtf8Bytes('PACT-CRE-2-COMMERCIAL-LEASE-002')),
   title: 'Bangalore Commercial Real Estate Lease Tokenization',
   jurisdiction: 'India (IN) / Singapore (SG)',
   legalWrapper: 'PACT-CRE-1 (Commercial Lease Cash Flow Assignment)',
@@ -170,17 +173,80 @@ const creScenarioStore: AgreementStateStore = {
   ]
 };
 
-let activeScenario: 'msme' | 'cre' = 'msme';
+// Seed Upstash Redis with default scenarios on boot
+async function initUpstashRedisSeed() {
+  try {
+    await redis.set(`pact:agreements:${msmeScenarioStore.agreementId}`, msmeScenarioStore);
+    await redis.set(`pact:agreements:${creScenarioStore.agreementId}`, creScenarioStore);
+    await redis.sadd('pact:agreement_ids', msmeScenarioStore.agreementId, creScenarioStore.agreementId);
+    await redis.set('pact:active_agreement_id', msmeScenarioStore.agreementId);
+    console.log('⚡ Upstash Redis initialized & seeded successfully!');
+  } catch (err) {
+    console.warn('⚠️ Upstash Redis seed warning (fallback to memory):', err);
+  }
+}
+initUpstashRedisSeed();
 
-function getActiveStore(): AgreementStateStore {
-  return activeScenario === 'msme' ? msmeScenarioStore : creScenarioStore;
+async function getActiveStore(): Promise<AgreementStateStore> {
+  try {
+    const activeId = (await redis.get<string>('pact:active_agreement_id')) || msmeScenarioStore.agreementId;
+    const store = await redis.get<AgreementStateStore>(`pact:agreements:${activeId}`);
+    if (store) return store;
+  } catch (err) {
+    console.warn('Redis get fallback to msmeScenarioStore');
+  }
+  return msmeScenarioStore;
 }
 
-// --- ROUTES ---
+async function saveStore(store: AgreementStateStore): Promise<void> {
+  try {
+    await redis.set(`pact:agreements:${store.agreementId}`, store);
+    await redis.sadd('pact:agreement_ids', store.agreementId);
+    await redis.set('pact:active_agreement_id', store.agreementId);
+  } catch (err) {
+    console.warn('Redis saveStore warning:', err);
+  }
+}
 
-// GET /api/agreements/seeded
-app.get('/api/agreements/seeded', (req, res) => {
-  const store = getActiveStore();
+// --- REST API ROUTES ---
+
+// GET /api/agreements — Fetch ALL agreements from Upstash Redis (For Financier Marketplace)
+app.get('/api/agreements', async (req, res) => {
+  try {
+    const ids = await redis.smembers('pact:agreement_ids');
+    const agreements: AgreementStateStore[] = [];
+
+    for (const id of ids) {
+      const agr = await redis.get<AgreementStateStore>(`pact:agreements:${id}`);
+      if (agr) {
+        agreements.push(agr);
+      }
+    }
+
+    if (agreements.length === 0) {
+      agreements.push(msmeScenarioStore, creScenarioStore);
+    }
+
+    const agreementsWithCredit = agreements.map(agr => ({
+      agreement: agr,
+      creditState: ContractCreditEngine.calculateCreditState(agr.events)
+    }));
+
+    res.json({ success: true, agreements: agreementsWithCredit });
+  } catch (err: any) {
+    res.json({
+      success: true,
+      agreements: [
+        { agreement: msmeScenarioStore, creditState: ContractCreditEngine.calculateCreditState(msmeScenarioStore.events) },
+        { agreement: creScenarioStore, creditState: ContractCreditEngine.calculateCreditState(creScenarioStore.events) }
+      ]
+    });
+  }
+});
+
+// GET /api/agreements/seeded — Fetch active agreement
+app.get('/api/agreements/seeded', async (req, res) => {
+  const store = await getActiveStore();
   const creditState = ContractCreditEngine.calculateCreditState(store.events);
   res.json({
     agreement: store,
@@ -188,13 +254,92 @@ app.get('/api/agreements/seeded', (req, res) => {
   });
 });
 
-// POST /api/agreements/select-scenario
-app.post('/api/agreements/select-scenario', (req, res) => {
-  const { scenario } = req.body;
-  if (scenario === 'msme' || scenario === 'cre') {
-    activeScenario = scenario;
+// POST /api/agreements/create — Borrower submits a new agreement to Upstash Redis
+app.post('/api/agreements/create', async (req, res) => {
+  try {
+    const { title, supplierName, buyerName, totalValue, monthlyPayment, scenarioKey, inspectionAuditor } = req.body;
+
+    const newId = `PACT-${(scenarioKey || 'CUSTOM').toUpperCase()}-${Date.now().toString().slice(-4)}`;
+    const agreementHash = ethers.keccak256(ethers.toUtf8Bytes(`${newId}-${title}-${Date.now()}`));
+
+    const newAgreement: AgreementStateStore = {
+      scenarioKey: scenarioKey || 'custom',
+      agreementId: newId,
+      agreementHash,
+      title: title || 'Custom Tokenized Agreement',
+      jurisdiction: 'India (IN)',
+      legalWrapper: scenarioKey === 'cre' 
+        ? 'PACT-CRE-1 (Commercial Lease Cash Flow Assignment)' 
+        : 'PACT-IN-1 (Factoring Regulation Act, Sec. 7)',
+      supplier: {
+        name: supplierName || 'Borrower Business Enterprise',
+        address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
+        cviStatus: 'VERIFIED',
+        cviTier: 35
+      },
+      buyer: {
+        name: buyerName || 'Enterprise Buyer / Tenant',
+        address: '0x2546BcD3c84621e976D8185a91A922aE77ECEc30',
+        cviStatus: 'VERIFIED',
+        cviTier: 45
+      },
+      financier: {
+        name: 'Apex Institutional Capital',
+        address: '0xcd3B766CCDd6AE721141F452C550Ca635964ce71',
+        cviStatus: 'VERIFIED',
+        cviTier: 50
+      },
+      totalValue: Number(totalValue) || 12000000,
+      currency: 'INR (₹)',
+      state: 'DRAFT',
+      obligations: Array.from({ length: 12 }, (_, i) => ({
+        id: i + 1,
+        title: `Payment Claim #${i + 1}`,
+        amount: Number(monthlyPayment) || Math.floor((Number(totalValue) || 12000000) / 12),
+        dueAt: `Month ${i + 1}`,
+        state: 'PENDING'
+      })),
+      events: [
+        {
+          eventType: 'AGREEMENT_EXECUTED',
+          timestamp: Math.floor(Date.now() / 1000),
+          evidenceHash: ethers.keccak256(ethers.toUtf8Bytes(`EXECUTION-${newId}`)),
+          actor: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
+        }
+      ]
+    };
+
+    if (inspectionAuditor) {
+      newAgreement.inspectionCertificate = {
+        auditor: inspectionAuditor,
+        verifiedAt: new Date().toISOString().split('T')[0],
+        reportHash: ethers.keccak256(ethers.toUtf8Bytes(`AUDIT-${inspectionAuditor}`)),
+        conditionRating: 'GRADE-A EXCELLENT',
+        zeroLiability: true
+      };
+      newAgreement.events.push({
+        eventType: 'INSPECTION_CERTIFICATE_VERIFIED',
+        timestamp: Math.floor(Date.now() / 1000),
+        evidenceHash: newAgreement.inspectionCertificate.reportHash,
+        actor: inspectionAuditor
+      });
+    }
+
+    await saveStore(newAgreement);
+
+    const creditState = ContractCreditEngine.calculateCreditState(newAgreement.events);
+    res.json({ success: true, agreement: newAgreement, creditState });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-  const store = getActiveStore();
+});
+
+// POST /api/agreements/select-scenario
+app.post('/api/agreements/select-scenario', async (req, res) => {
+  const { scenario } = req.body;
+  const targetId = scenario === 'cre' ? creScenarioStore.agreementId : msmeScenarioStore.agreementId;
+  await redis.set('pact:active_agreement_id', targetId);
+  const store = await getActiveStore();
   const creditState = ContractCreditEngine.calculateCreditState(store.events);
   res.json({ success: true, agreement: store, creditState });
 });
@@ -202,7 +347,7 @@ app.post('/api/agreements/select-scenario', (req, res) => {
 // POST /api/agreements/activate
 app.post('/api/agreements/activate', async (req, res) => {
   try {
-    const store = getActiveStore();
+    const store = await getActiveStore();
     store.state = 'ACTIVE';
     store.events.push({
       eventType: 'AGREEMENT_ACTIVATED',
@@ -210,6 +355,8 @@ app.post('/api/agreements/activate', async (req, res) => {
       evidenceHash: ethers.keccak256(ethers.toUtf8Bytes('ACTIVATION-PROOF')),
       actor: store.buyer.address
     });
+
+    await saveStore(store);
 
     const creditState = ContractCreditEngine.calculateCreditState(store.events);
     res.json({ success: true, agreement: store, creditState });
@@ -221,7 +368,7 @@ app.post('/api/agreements/activate', async (req, res) => {
 // POST /api/agreements/deliver-and-finance
 app.post('/api/agreements/deliver-and-finance', async (req, res) => {
   try {
-    const store = getActiveStore();
+    const store = await getActiveStore();
     const obl = store.obligations[0];
     const deliveryEvidenceHash = '0x8829f01a2b3c4d5e6f7a8b9c0d1e2f3a4f829c2d1e0854378912e8b901a5b6c7';
 
@@ -287,6 +434,8 @@ app.post('/api/agreements/deliver-and-finance', async (req, res) => {
       status: 'ACTIVE'
     };
 
+    await saveStore(store);
+
     const creditState = ContractCreditEngine.calculateCreditState(store.events);
     res.json({ success: true, agreement: store, creditState, receivable, encumbrance, ownerSignature });
   } catch (err: any) {
@@ -297,7 +446,7 @@ app.post('/api/agreements/deliver-and-finance', async (req, res) => {
 // POST /api/agreements/simulate-missed-delivery
 app.post('/api/agreements/simulate-missed-delivery', async (req, res) => {
   try {
-    const store = getActiveStore();
+    const store = await getActiveStore();
     const obl2 = store.obligations[1];
     obl2.state = 'LATE';
     store.state = 'AT_RISK';
@@ -311,6 +460,8 @@ app.post('/api/agreements/simulate-missed-delivery', async (req, res) => {
       actor: store.supplier.address
     });
 
+    await saveStore(store);
+
     const creditState = ContractCreditEngine.calculateCreditState(store.events);
     res.json({ success: true, agreement: store, creditState });
   } catch (err: any) {
@@ -321,7 +472,7 @@ app.post('/api/agreements/simulate-missed-delivery', async (req, res) => {
 // POST /api/agreements/simulate-cvi-freeze
 app.post('/api/agreements/simulate-cvi-freeze', async (req, res) => {
   try {
-    const store = getActiveStore();
+    const store = await getActiveStore();
     store.financier.cviStatus = 'FROZEN';
     if (store.capitalPosition) {
       store.capitalPosition.status = 'SUSPENDED';
@@ -334,6 +485,8 @@ app.post('/api/agreements/simulate-cvi-freeze', async (req, res) => {
       actor: 'CLEANVERSE_VALIDATOR'
     });
 
+    await saveStore(store);
+
     const creditState = ContractCreditEngine.calculateCreditState(store.events);
     res.json({ success: true, agreement: store, creditState });
   } catch (err: any) {
@@ -344,7 +497,7 @@ app.post('/api/agreements/simulate-cvi-freeze', async (req, res) => {
 // POST /api/agreements/restore-cvi
 app.post('/api/agreements/restore-cvi', async (req, res) => {
   try {
-    const store = getActiveStore();
+    const store = await getActiveStore();
     store.financier.cviStatus = 'VERIFIED';
     if (store.capitalPosition) {
       store.capitalPosition.status = 'SETTLED';
@@ -365,6 +518,8 @@ app.post('/api/agreements/restore-cvi', async (req, res) => {
       actor: store.buyer.address
     });
 
+    await saveStore(store);
+
     const creditState = ContractCreditEngine.calculateCreditState(store.events);
     res.json({ success: true, agreement: store, creditState });
   } catch (err: any) {
@@ -373,5 +528,5 @@ app.post('/api/agreements/restore-cvi', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`⚡ PACT Protocol Server listening on port ${PORT}`);
+  console.log(`⚡ PACT Protocol Server with Upstash Redis listening on port ${PORT}`);
 });
