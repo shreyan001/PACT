@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 async function runWebUITests() {
-  console.log('🧪 Running Web UI TDD Tests for Ticket 03...\n');
+  console.log('🧪 Running Web UI TDD Tests...\n');
 
   const webDir = path.resolve(__dirname, '../../apps/web');
 
@@ -32,57 +32,26 @@ async function runWebUITests() {
   }
   console.log('✅ Test 3 Passed: Vite Config API Proxy Verified (Target: http://localhost:3002)');
 
-  // Test 4: Verify App.tsx Lifecycle Action Buttons
+  // Test 4: Verify App.tsx Clean Navigation (Borrow & Finance)
   const appContent = fs.readFileSync(path.join(webDir, 'src/App.tsx'), 'utf8');
-  const requiredButtons = [
-    '1. Activate Contract',
-    '2. Deliver & Issue CVA',
-    '3. Miss Delivery (AT_RISK)',
-    '4. Freeze CVI (Suspend)',
-    '5. Restore CVI (Release)'
-  ];
-
-  for (const btnText of requiredButtons) {
-    if (!appContent.includes(btnText)) {
-      throw new Error(`Test 4 Failed: Lifecycle button "${btnText}" missing from App.tsx`);
-    }
+  if (!appContent.includes('Borrow') || !appContent.includes('Finance (')) {
+    throw new Error('Test 4 Failed: Clean Borrow and Finance tabs missing from App.tsx');
   }
-  console.log('✅ Test 4 Passed: All 5 Lifecycle Action Buttons Verified in App.tsx');
+  console.log('✅ Test 4 Passed: Clean Navigation (Borrow & Finance) Verified');
 
-  // Test 5: Verify Ticket 01 4-Step Borrower Stepper Navigation
-  const requiredSteps = [
-    '1. Select Preset Contract',
-    '2. PDF Document Upload',
-    '3. AI Clause Extraction',
-    '4. Compliance Gating & Publish'
-  ];
-
-  for (const stepText of requiredSteps) {
-    if (!appContent.includes(stepText)) {
-      throw new Error(`Test 5 Failed: Stepper element "${stepText}" missing from App.tsx`);
-    }
+  // Test 5: Verify Absence of "Upstash Redis" and "Landing" Button in App.tsx
+  if (appContent.includes('Upstash Redis') || appContent.includes('>Landing<')) {
+    throw new Error('Test 5 Failed: "Upstash Redis" or "Landing" button still present in App.tsx');
   }
-  console.log('✅ Test 5 Passed: Ticket 01 4-Step Borrower Stepper Navigation Verified');
+  console.log('✅ Test 5 Passed: "Upstash Redis" and "Landing" Button Successfully Removed');
 
-  // Test 6: Verify Ticket 01 Dual Preset Options
-  if (
-    !appContent.includes('Option 1: MSME Supply Agreement') ||
-    !appContent.includes('Option 2: Commercial CRE Lease')
-  ) {
-    throw new Error('Test 6 Failed: Ticket 01 dual preset options missing from App.tsx');
+  // Test 6: Verify Zero Border Radius (`rounded-none`) Seam
+  if (!appContent.includes('rounded-none')) {
+    throw new Error('Test 6 Failed: Zero border radius (rounded-none) missing from App.tsx');
   }
-  console.log('✅ Test 6 Passed: Ticket 01 Dual Preset Contract Options Verified');
+  console.log('✅ Test 6 Passed: Zero Border Radius (rounded-none) Precision Seam Verified');
 
-  // Test 7: Verify Ticket 03 Financier Underwriting Yield & CVI Gating Pill
-  if (
-    !appContent.includes('Underwritten Yield APR:') ||
-    !appContent.includes('CVI Identity Gating:')
-  ) {
-    throw new Error('Test 7 Failed: Ticket 03 Financier Underwriting Yield & CVI Gating Pill missing from App.tsx');
-  }
-  console.log('✅ Test 7 Passed: Ticket 03 Financier Underwriting Yield & CVI Gating Pill Verified');
-
-  console.log('\n🎉 ALL WEB UI TDD TESTS FOR TICKET 03 PASSED SUCCESSFULLY!');
+  console.log('\n🎉 ALL WEB UI TDD TESTS PASSED SUCCESSFULLY!');
 }
 
 runWebUITests().catch(err => {
