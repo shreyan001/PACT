@@ -3,10 +3,11 @@ import { ContractCreditEngine } from '../engine/ContractCreditEngine';
 import { ReceivableEngine } from '../engine/ReceivableEngine';
 import { EncumbranceEngine } from '../engine/EncumbranceEngine';
 import { generateCleanverseOwnerSignature } from '../web3/eipSigning';
+import { Redis } from '@upstash/redis';
 import { ethers } from 'ethers';
 
 async function runServerTests() {
-  console.log('🧪 Running Ticket 04 TDD Tests (Express API Server Integration)...\n');
+  console.log('🧪 Running Ticket 02 TDD Tests (Upstash Redis & API Integration)...\n');
 
   // Test 1: Verify EIP-191 Signature & Encumbrance Logic for API Route Integration
   const privateKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
@@ -91,10 +92,38 @@ async function runServerTests() {
   }
   console.log('✅ Test 5 Passed: CVI Compliance Freeze API Route Verified (Status:', creditStateSuspended.complianceStatus, ')');
 
-  console.log('\n🎉 ALL TICKET 04 TDD TESTS PASSED SUCCESSFULLY!');
+  // Test 6: Verify Upstash Redis Live Read/Write Connection (Ticket 02)
+  const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL || 'https://merry-lamprey-178715.upstash.io',
+    token: process.env.UPSTASH_REDIS_REST_TOKEN || 'gQAAAAAAArobAAIgcDE4YjZhNTAyZTczYmM0Y2Q4YmJhYzUxZWJmZTcwOTY3Mg'
+  });
+
+  await redis.set('pact:test_ticket_02', 'redis_ok');
+  const redisVal = await redis.get<string>('pact:test_ticket_02');
+  if (redisVal !== 'redis_ok') {
+    throw new Error('Test 6 Failed: Upstash Redis read/write roundtrip failed');
+  }
+  console.log('✅ Test 6 Passed: Upstash Redis Live Connection & Key Scheme Verified');
+
+  // Test 7: Verify Encumbrance Claim Fingerprint Generation for Redis Persistence (Ticket 02)
+  const testClaimFp = EncumbranceEngine.verifyAndRegisterClaim({
+    agreementHash: ethers.keccak256(ethers.toUtf8Bytes('PACT-TEST-AGREEMENT-REDIS')),
+    obligor: '0x2546BcD3c84621e976D8185a91A922aE77ECEc30',
+    beneficiary: '0xcd3B766CCDd6AE721141F452C550Ca635964ce71',
+    obligationId: 101,
+    amount: 500000,
+    dueDate: Math.floor(Date.now() / 1000) + 86400 * 30
+  });
+
+  if (!testClaimFp.claimFingerprint || !testClaimFp.claimFingerprint.startsWith('0x')) {
+    throw new Error('Test 7 Failed: Encumbrance fingerprint generation failed for Redis persistence');
+  }
+  console.log('✅ Test 7 Passed: Encumbrance Claim Fingerprint Verified for Redis Persistence');
+
+  console.log('\n🎉 ALL TICKET 02 TDD TESTS PASSED SUCCESSFULLY!');
 }
 
 runServerTests().catch(err => {
-  console.error('❌ Ticket 04 Test Failed:', err);
+  console.error('❌ Ticket 02 Test Failed:', err);
   process.exit(1);
 });
