@@ -188,7 +188,7 @@ contract PactAgreement {
             keccak256("DELIVERY_MISSED"),
             msg.sender,
             evidenceHash,
-            "PACT-IN-1: Delivery Missed — Contract AT_RISK"
+            "PACT-IN-1: Delivery Missed - Contract AT_RISK"
         );
 
         emit AgreementStateChanged(previous, AgreementState.AT_RISK, "Delivery Missed");

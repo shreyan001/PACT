@@ -418,11 +418,11 @@ app.post('/api/agreements/deliver-and-finance', async (req, res) => {
       actor: store.supplier.address
     });
 
-    // 3. Generate EIP-191 Owner Signature
+    // 3. Generate EIP-191 Owner Signature with Live Base Sepolia Deployed Contract
     const ownerSignature = await generateCleanverseOwnerSignature({
       chain: 'base',
-      contractAddress: '0x52411a2b15e1Cd44bd332eF4F8D599D9e7ae6103',
-      privateKey: process.env.DEPLOYER_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+      contractAddress: '0x41833fEfCFE9ABE3Fc73cFDeb71AdbD60C624733',
+      privateKey: process.env.BASE_SEPOLIA_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
     });
 
     // 4. Fund Position & Link CVA Asset Rail with RuleV2 Compliance Policy
