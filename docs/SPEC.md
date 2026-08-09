@@ -1,85 +1,147 @@
-# PACT Protocol — Functional & Technical Specification
+# PACT Protocol v2.0 — Comprehensive Functional & Technical Specification
 
-## Problem Statement
+## 1. Executive Protocol Overview
 
-Traditional RWA tokenization models attempt to tokenize static PDF invoices *after* they are issued, treating compliance as a superficial frontend badge and ignoring the underlying commercial relationship. This introduces severe systemic risks:
-1. **Double-Financing & Fraud**: A supplier can tokenize an invoice onchain while simultaneously factoring it at traditional banks.
-2. **Static Compliance**: Compliance is evaluated once during onboarding rather than enforced onchain per transaction.
-3. **Lack of Performance Evidence**: Static tokens cannot observe whether the seller actually delivered goods, whether the buyer accepted them, or if performance has degraded.
-4. **Unsupported Legal Claims**: Claiming token minting automatically transfers legal ownership without a valid jurisdictional factoring wrapper.
+**PACT (Programmable Agreement Capital Technology)** is an institutional contract-to-capital infrastructure protocol built on the **Cleanverse Compliance Protocol (CCP v5.6)**. PACT converts legally executed commercial agreements into continuously observable, programmable economic relationships and turns their crystallized contractual rights into compliance-native financial assets (`CVA`).
 
-## Solution
+Unlike traditional RWA tokenization platforms that attempt to tokenize static PDF invoices *after* issuance, PACT operates upstream across the entire contractual lifecycle:
 
-**PACT (Programmable Agreement Capital Technology)** is a contract-to-capital infrastructure protocol built on Cleanverse. PACT turns legally executed commercial agreements into continuously observable, programmable economic relationships:
-1. Tracks obligations from pre-performance to buyer delivery acceptance.
-2. Crystallizes earned payment rights under a jurisdiction-specific legal wrapper (`PACT-IN-1` for Indian MSME Factoring under Section 7 of the Factoring Regulation Act).
-3. Verifies real-world claim fingerprints (`claimFingerprint`) in an `EncumbranceRegistry` to block duplicate financing.
-4. Maintains an evidence-derived **Contract Credit Engine** evaluating performance reliability, payment reliability, dispute exposure, and evidence integrity.
-5. Integrates Cleanverse Verified Assets (`CVA`) and `RuleV2` compliance policies, ensuring every onchain action calls `IAPassComplianceValidator.complianceVerify()` directly.
+```text
+LEGAL AGREEMENT (PDF / Indian MSME Supply Agreement or CRE Lease)
+       │
+       ▼
+VERIFIED PARTIES (Cleanverse CVI Tier Verification)
+       │
+       ▼
+12 STRUCTURED OBLIGATIONS (Monthly Deliveries / Lease Rent Claims)
+       │
+       ▼
+ONCHAIN LEGAL EVENTS (LegalEventRegistry.sol + SHA-256 Hashes)
+       │
+       ▼
+CONTRACT CREDIT ENGINE (Evidence-Derived Scores: Payment 96, Performance 93 → 68)
+       │
+       ▼
+RECEIVABLE CRYSTALLIZATION (ReceivableEngine.ts: PENDING → CRYSTALLIZED)
+       │
+       ▼
+STATUTORY LEGAL ASSIGNMENT (`PACT-IN-1` Factoring Act Sec 7 & IT Act Sec 10A)
+       │
+       ▼
+ANTI-DOUBLE-FINANCING GUARD (EncumbranceRegistry.sol: Keccak-256 claimFingerprint)
+       │
+       ▼
+COMPLIANT CAPITAL ASSET (Cleanverse CVA ERC20 + RuleV2 Policy)
+```
 
-## User Stories
+---
 
-1. As a Supplier (e.g. ABC Components Pvt Ltd), I want to ingest a signed commercial supply agreement into PACT, so that my 12 monthly delivery obligations are structured into machine-readable contract states.
-2. As a Supplier, I want my buyer (LargeCorp India) to be verified via Cleanverse CVI, so that I know my counterparty satisfies institutional compliance tiers.
-3. As a Supplier, I want to record delivery fulfillment evidence (SHA-256 content hash) when I complete a shipment, so that my contractual obligation can transition towards crystallization.
-4. As a Buyer (LargeCorp India), I want to confirm delivery acceptance onchain, so that the underlying payment obligation officially crystallizes into an enforceable receivable under the `PACT-IN-1` legal wrapper.
-5. As a Supplier, I want to legally assign a crystallized receivable to a financier, so that I can access immediate working capital before the 30-day payment term expires.
-6. As a Financier (ABC Capital Finance), I want PACT to calculate a unique `claimFingerprint` and check the `EncumbranceRegistry`, so that I am 100% protected against double-financing or duplicate assignments.
-7. As a Financier, I want to fund an assigned receivable position and receive a compliance-native `CVA` token, so that my capital position is represented by an asset whose transfers are gated by Cleanverse `RuleV2` policies.
-8. As a Financier, I want to observe a real-time, evidence-derived Contract Credit Rating (Payment Reliability, Performance Reliability, Dispute Exposure), so that I can monitor the credit health of the specific contractual relationship.
-9. As a Hackathon Judge, I want to simulate a missed delivery event, so that I can observe the Contract Credit score drop live (93 → 68) and the contract state shift to `AT_RISK` with click-to-inspect evidence hashes.
-10. As a Cleanverse Compliance Inspector, I want the business contract to call `validator.complianceVerify()` directly during state transitions, so that ineligible callers are automatically blocked onchain.
-11. As a Cleanverse Compliance Inspector, I want payments to ineligible or frozen recipients to transition into a `SUSPENDED` suspense pool, so that funds are accounted for without being lost or permanently locked.
-12. As a Financier whose CVI eligibility is restored, I want suspended payments to automatically transition to `RELEASED` & settled, so that my capital position settles cleanly once compliance is re-verified.
+## 2. Core Subsystem Architecture
 
-## Implementation Decisions
+### A. Borrower Contract Tokenization & AI Extraction Subsystem
+1. **Preset Demonstration Scenarios**:
+   - **Scenario 1: MSME Automotive Parts Supply Agreement (`PACT-IN-001`)**: *ABC Components Pvt Ltd* $\leftrightarrow$ *LargeCorp / TATA India* (₹1.2 Crore total value, 12 monthly deliveries @ ₹1,000,000 / mo).
+   - **Scenario 2: Commercial Real Estate Lease Tokenization (`PACT-CRE-002`)**: *Vanguard Commercial Realty* $\leftrightarrow$ *Nexus Tech Solutions* (₹36 Lakh 3-year commercial rental income stream, 3rd contract renewal tenure, Bureau Veritas 3rd-party structural inspection report hash attached).
+2. **AI LLM Extraction Engine**: Parses contract obligations, payment terms, deposit guarantees, renewal tenure history, and 3rd-party inspection audit report SHA-256 hashes (`0x91a4f0...`).
+3. **Borrower Demo Stepper**:
+   - Step 1: Select Preset Contract Scenario (MSME Supply vs CRE Lease)
+   - Step 2: Ingest Signed PDF Document & Verify Document SHA-256 Hash
+   - Step 3: Extract Contract Parameters, Clauses & Proof Attachments
+   - Step 4: Verify Backend Directories (Cleanverse CVI Tier 30+, `IAPassComplianceValidator` Registration, `EncumbranceRegistry` Anti-Double-Financing Guard) $\rightarrow$ Tokenize & Publish to Financier Marketplace.
 
-### Module Layout (`codebase/`)
-All application code lives strictly inside `codebase/`:
-* **Smart Contracts** (`codebase/contracts/`):
-  * `PactAgreement.sol`: Main agreement state machine (`DRAFT`, `ACTIVE`, `AT_RISK`, `SUSPENDED`, `COMPLETED`) with `IAPassComplianceValidator.complianceVerify()` hooks.
-  * `LegalEventRegistry.sol`: Event-sourced legal ledger recording SHA-256 evidence hashes.
-  * `EncumbranceRegistry.sol`: Anti-double-financing registry tracking claim fingerprints.
-  * `PactCapital.sol`: Capital position vault, CVA minter bridge, and suspense pool manager.
-* **Cleanverse API Client** (`codebase/src/cleanverse/`):
-  * `encryption.ts`: Cleanverse AES/CBC/PKCS5Padding encryption/decryption module with 16 zero-byte IV and Base64 key normalization.
-  * `client.ts`: Cooperate API v5.6 HTTP client (`/generate_apass`, `/update_status`, `/atoken/launch`, `/validator/register`, `/validator/verify`).
-* **Web3 Utilities** (`codebase/src/web3/`):
-  * `eipSigning.ts`: Generates EIP-191 `personal_sign` owner signatures for Cleanverse contract registration.
-* **Protocol Engines** (`codebase/src/engine/`):
-  * `ContractCreditEngine.ts`: Evidence-derived credit rating calculator.
-  * `ReceivableEngine.ts`: Obligation crystallization engine under `PACT-IN-1`.
-  * `EncumbranceEngine.ts`: Claim fingerprint calculation and collision detector.
-* **Backend Server** (`codebase/src/api/server.ts`):
-  * Express protocol server running on port `3002`.
-* **Web Frontend** (`codebase/apps/web/`):
-  * Vite + React dashboard built using the **Juicebox (PeopleGPT) Token-Driven Design System**.
+### B. Upstash Redis Real-Time Multi-Agreement Persistence
+- **Storage Layer**: Uses `@upstash/redis` to persist active contract state stores under key `pact:agreements:<id>` and tracks all listings in the Redis set `pact:agreement_ids`.
+- **Marketplace Sync**: When a borrower tokenizes a contract, it is saved to Upstash Redis in real time (`POST /api/agreements/create`). The Financier Marketplace dynamically queries `GET /api/agreements` to display live active listings.
 
-### Inlined Prototype Decisions
+### C. Cleanverse CVI & RuleV2 Policy Engine
+- **Identity Gating**: Counterparties (Supplier/Assignor, Buyer/Obligor, Financier/Assignee) must hold Cleanverse Verified Identity (`CVI`) Tier 30+ ratings.
+- **RuleV2 Compliance Policy Struct**:
+  ```solidity
+  struct RuleV2 {
+      bytes2 allowedGroup;       // Allowed CVI group
+      bytes2 allowedSubGroup;    // Allowed CVI sub-group
+      uint8 minTier;             // Minimum CVI tier (0-99)
+      uint8 minSubTier;          // Minimum sub-tier (0-99)
+      bool isBlackList;          // Blacklist flag
+      uint256 countryBitmap;     // Country bitmap (e.g. 356 for India, 702 for Singapore)
+  }
+  ```
+- **Single-Contract Validator Hook**: Every state transition calls `IAPassComplianceValidator.complianceVerify(poolAddress, userAddress)` onchain. Failed compliance automatically redirects payments into the Cleanverse `SUSPENDED` suspense pool without losing funds.
 
+### D. Evidence-Derived Contract Credit Engine (`ContractCreditEngine.ts`)
+Calculates multi-dimensional risk scores from observable legal events:
+- **Payment Reliability**: 0 - 100 (Increased on `PAYMENT_ON_TIME`, decreased on `PAYMENT_LATE`).
+- **Performance Reliability**: 0 - 100 (Increased on `DELIVERY_ACCEPTED`, degraded to 68 on `DELIVERY_MISSED`).
+- **Dispute Exposure**: 0 - 100 (Decreased when clean, increased on `DISPUTE_OPENED`).
+- **Contract Stability**: 0 - 100 (Higher for multi-renewal tenures and Grade-A 3rd-party property audit certificates).
+- **Compliance Status**: `PASS` | `FAIL`.
+- **Assignment Integrity**: `UNENCUMBERED` | `ASSIGNED` | `CONFLICT`.
+
+### E. Encumbrance & Anti-Double-Financing Guard (`EncumbranceRegistry.sol`)
+Computes an immutable Keccak-256 fingerprint for every payment claim before financing:
 ```solidity
-// Encumbrance Claim Fingerprint (Section 29 Decision)
-claimFingerprint = keccak256(abi.encodePacked(agreementHash, obligor, beneficiary, obligationId, amount, dueDate));
+claimFingerprint = keccak256(abi.encodePacked(
+    agreementHash, obligor, beneficiary, obligationId, amount, dueDate
+));
 ```
+Rejects duplicate registration attempts if a claim is already assigned or pledged elsewhere.
 
-```typescript
-// Cleanverse AES Encryption & EIP-191 Owner Signature (Section 67 Decision)
-const payloadString = `${chain.toLowerCase()}${contractAddress.toLowerCase()}`;
-const signature = await wallet.signMessage(ethers.getBytes(ethers.keccak256(ethers.toUtf8Bytes(payloadString))));
+### F. Statutory Legal Enforceability Wrappers
+- **`PACT-IN-1` (India Flagship)**:
+  - **Factoring Regulation Act, 2011 (Sec 7)**: Statutory assignment of crystallized receivables to financier with binding notice to debtor.
+  - **Information Technology Act, 2000 (Sec 10A & 3A)**: EIP-191 `personal_sign` digital signatures on electronic contracts.
+  - **Indian Evidence Act, 1872 (Sec 65B)**: Onchain SHA-256 evidence hashes producing court-admissible certificates.
+- **`PACT-SG-1` (Singapore Baseline)**: Cleanverse International Pte. Ltd. native protocol environment under Singapore law & arbitration.
+
+---
+
+## 3. End-to-End User Journeys
+
+### Borrower / Contract Creator Journey
+1. Open **Borrower Portal** and select a contract scenario (Option 1: MSME Automotive Supply Agreement or Option 2: Commercial Real Estate Lease).
+2. Inspect the PDF agreement document, document SHA-256 hash, and launch the **AI Clause & Risk Extraction Pipeline**.
+3. Review extracted contract parameters, payment terms, deposit guarantees, and attached 3rd-party property inspection certificates (Bureau Veritas Grade-A Report `0x91a4f0...`).
+4. Execute **Backend Directory Checks** (Cleanverse CVI Tier 30+, `IAPassComplianceValidator` Registration, `EncumbranceRegistry` Anti-Double-Financing Guard).
+5. Click **Tokenize & Publish to Financier Marketplace** to persist the contract in Upstash Redis and make it available to lenders.
+
+### Financier / Institutional Lender Journey
+1. Open **Financier Marketplace Dashboard** to view all active tokenized listings fetched in real time from Upstash Redis (`GET /api/agreements`).
+2. Inspect the credit scorecard (Payment Reliability, Performance Score, Tenant/Buyer Rating, 3rd-party inspection proofs, legal wrapper).
+3. Click **Underwrite & Fund CVA Capital Position** to execute the onchain funding transaction, issuing CVA ERC-20 tokens at a 3.0% - 4.5% APR yield discount.
+4. Monitor live portfolio performance, track escrow disbursements, and trigger compliance freeze/unfreeze actions via the Cleanverse Suspense Pool.
+
+---
+
+## 4. Technology Stack & Directory Structure
+
+```text
+codebase/
+├── contracts/
+│   ├── PactAgreement.sol               # State machine (DRAFT, ACTIVE, AT_RISK, SUSPENDED, SETTLED)
+│   ├── EncumbranceRegistry.sol         # Anti-double-financing Keccak-256 claim fingerprint guard
+│   ├── LegalEventRegistry.sol          # Onchain legal event ledger linked to SHA-256 evidence hashes
+│   ├── PactCapital.sol                 # CVA capital vault & suspense pool manager
+│   ├── IATokenPolicy.sol               # Cleanverse CVA RuleV2 policy interface
+│   └── IAPassComplianceValidator.sol   # Cleanverse compliance validator interface
+├── src/
+│   ├── api/
+│   │   ├── server.ts                   # Express server on port 3002 with Upstash Redis persistence
+│   │   └── server.test.ts              # API server integration test suite
+│   ├── cleanverse/
+│   │   ├── client.ts                   # Cooperate API v5.6 client
+│   │   ├── encryption.ts               # AES-256 payload encryption & Base64 key handler
+│   │   └── types.ts                    # RuleV2 & Cleanverse v5.6 TypeScript types
+│   ├── engine/
+│   │   ├── ContractCreditEngine.ts     # Multi-dimensional evidence-derived credit engine
+│   │   ├── ReceivableEngine.ts         # Obligation crystallization pipeline (PENDING -> CRYSTALLIZED)
+│   │   └── EncumbranceEngine.ts        # Claim fingerprint calculation & collision detector
+│   └── web3/
+│       └── eipSigning.ts               # EIP-191 personal_sign owner signature generator
+└── apps/web/
+    ├── index.html                      # Entry HTML with Tailwind CSS & Juicebox design tokens
+    ├── src/
+    │   ├── App.tsx                     # Multi-role dApp UI (Landing Page, Borrower Portal, Financier Marketplace)
+    │   ├── index.css                   # Juicebox design system framing (.jb-framed-container, .jb-purple-canvas)
+    │   └── main.tsx                    # React DOM renderer
+    └── vite.config.ts                  # Vite proxy config (Target: http://localhost:3002)
 ```
-
-## Testing Decisions
-
-### Seam Breakdown
-1. **Seam 1 — Prototype & Math Sanity Checks** ([`codebase/.scratch/prototype_sanity_check.ts`](file:///C:/Users/acer/OneDrive/Desktop/PACT/codebase/.scratch/prototype_sanity_check.ts)): Evaluates AES encryption/decryption, EIP-191 signatures, claim fingerprinting, and credit scoring algorithms directly.
-2. **Seam 2 — Protocol API Endpoint Integration**: Verifies Express server routes (`/api/agreements/seeded`, `/api/agreements/activate`, `/api/agreements/deliver-and-finance`, `/api/agreements/simulate-missed-delivery`, `/api/agreements/simulate-cvi-freeze`, `/api/agreements/restore-cvi`).
-3. **Seam 3 — Production Frontend Build Verification**: Executes `npx vite build apps/web` in `codebase/` to ensure zero compilation or styling errors.
-
-## Out of Scope
-
-* Automated cross-border court litigation execution (flagship demo models legal assignment under Indian Factoring Act `PACT-IN-1`).
-* Machine-learning black-box credit scoring (credit ratings are strictly evidence-derived via `ContractCreditEngine.ts`).
-
-## Further Notes
-
-* Adheres strictly to [`AGENTS.md`](file:///C:/Users/acer/OneDrive/Desktop/PACT/AGENTS.md) rules and [`ethskills`](file:///C:/Users/acer/OneDrive/Desktop/PACT/.agents/skills/ethskills/SKILL.md) guidelines (onchain naming, EIP-191 message signing, 6-decimal token formatting, 2-contract core architecture).
