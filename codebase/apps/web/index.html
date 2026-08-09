@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PACT — Programmable Agreement Capital Technology</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS Engine for dynamic utilities -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              jb: {
+                canvas: '#f8f6f8',
+                card: '#ffffff',
+                hero: '#6a2f8d',
+                herodark: '#3a1a4d',
+                pill: '#f1e6f8',
+                text: '#1d161d',
+                muted: '#574e57',
+                dim: '#786c78',
+                purple: '#6a2f8d',
+                purplelight: '#b054e7',
+                border: '#e7e4e7',
+                borderdark: '#786c78',
+                btn: '#1d161d',
+                green: '#10b981',
+                yellow: '#f59e0b',
+                red: '#f43f5e'
+              }
+            },
+            fontFamily: {
+              sans: ['Inter', '-apple-system', 'sans-serif'],
+              mono: ['DM Mono', 'JetBrains Mono', 'monospace']
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+  <body class="bg-[#f8f6f8] text-[#1d161d] font-sans antialiased selection:bg-[#f1e6f8] selection:text-[#6a2f8d]">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

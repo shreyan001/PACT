@@ -1,0 +1,19 @@
+# Node & Build Outputs
+node_modules/
+dist/
+build/
+.cache/
+*.log
+
+# Environment & Private Keys
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE & System Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
