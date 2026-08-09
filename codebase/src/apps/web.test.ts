@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 async function runWebUITests() {
-  console.log('🧪 Running Web UI TDD Tests...\n');
+  console.log('🧪 Running Web UI TDD Tests for Ticket 01...\n');
 
   const webDir = path.resolve(__dirname, '../../apps/web');
 
@@ -49,7 +49,31 @@ async function runWebUITests() {
   }
   console.log('✅ Test 4 Passed: All 5 Lifecycle Action Buttons Verified in App.tsx');
 
-  console.log('\n🎉 ALL WEB UI TDD TESTS PASSED SUCCESSFULLY!');
+  // Test 5: Verify Ticket 01 4-Step Borrower Stepper Navigation
+  const requiredSteps = [
+    '1. Select Preset Contract',
+    '2. PDF Document Upload',
+    '3. AI Clause Extraction',
+    '4. Compliance Gating & Publish'
+  ];
+
+  for (const stepText of requiredSteps) {
+    if (!appContent.includes(stepText)) {
+      throw new Error(`Test 5 Failed: Stepper element "${stepText}" missing from App.tsx`);
+    }
+  }
+  console.log('✅ Test 5 Passed: Ticket 01 4-Step Borrower Stepper Navigation Verified');
+
+  // Test 6: Verify Ticket 01 Dual Preset Options
+  if (
+    !appContent.includes('Option 1: MSME Supply Agreement') ||
+    !appContent.includes('Option 2: Commercial CRE Lease')
+  ) {
+    throw new Error('Test 6 Failed: Ticket 01 dual preset options missing from App.tsx');
+  }
+  console.log('✅ Test 6 Passed: Ticket 01 Dual Preset Contract Options Verified');
+
+  console.log('\n🎉 ALL WEB UI TDD TESTS FOR TICKET 01 PASSED SUCCESSFULLY!');
 }
 
 runWebUITests().catch(err => {
