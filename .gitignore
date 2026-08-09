@@ -12,8 +12,22 @@ build/
 *.pem
 *.key
 
-# IDE & System Files
+# IDE, OS & System Bloat
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+__MACOSX/
+
+# Agent, Skill & Scratch Bloat Files
+.agents/
+.scratch/
+skills-lock.json
+
+# Raw Documentation & Protocol Specification Files (Ignored for clean repo)
+Cleanverse Compliance Protocol (CCP) CVA Integration Guide.txt
+Cleanverse_Compliance_Protocol_CCP_Integration_Guide_For_CVI_Compliance (1).md
+cleanverse_api_docs.md
+CONTEXT.md
+PACT.md
+Media Kit/
