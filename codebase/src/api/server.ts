@@ -425,13 +425,20 @@ app.post('/api/agreements/deliver-and-finance', async (req, res) => {
       privateKey: process.env.DEPLOYER_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
     });
 
-    // 4. Fund Position & Link CVA Asset Rail
+    // 4. Fund Position & Link CVA Asset Rail with RuleV2 Compliance Policy
     store.capitalPosition = {
       positionId: 1,
-      fundedAmount: Math.floor(obl.amount * 0.97),
+      fundedAmount: Math.floor(obl.amount * (store.inspectionCertificate ? 0.968 : 0.962)),
       faceValue: obl.amount,
       cvaToken: `0xCVA_${store.scenarioKey.toUpperCase()}_001_CLEANVERSE`,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      txHash: '0x372cd7bc8f2628fd9aac687c5cab02542a5371b83c00ad293eee545888ec6db6',
+      ruleV2: {
+        minTier: 30,
+        minSubTier: 0,
+        isBlackList: false,
+        countryBitmap: store.jurisdiction.includes('IN') ? 356 : 702
+      }
     };
 
     await saveStore(store);

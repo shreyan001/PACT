@@ -60,6 +60,13 @@ interface AgreementData {
     faceValue: number;
     cvaToken: string;
     status: string;
+    txHash?: string;
+    ruleV2?: {
+      minTier: number;
+      minSubTier: number;
+      isBlackList: boolean;
+      countryBitmap: number;
+    };
   };
   events: EventRecord[];
 }
@@ -706,9 +713,20 @@ export default function App() {
                 )}
 
                 {agr.capitalPosition ? (
-                  <div className="p-3 bg-[#f1e6f8] border border-[#6a2f8d] text-[#6a2f8d] font-extrabold flex items-center justify-between rounded-none">
-                    <span>Funded Position: ₹{agr.capitalPosition.fundedAmount.toLocaleString('en-IN')}</span>
-                    <span className="text-[10px] bg-[#6a2f8d] text-white px-2 py-0.5">CVA ISSUED ✓</span>
+                  <div className="p-3 bg-[#f1e6f8] border-2 border-[#6a2f8d] text-[#6a2f8d] font-extrabold space-y-2 rounded-none">
+                    <div className="flex items-center justify-between">
+                      <span>Funded Position: ₹{agr.capitalPosition.fundedAmount.toLocaleString('en-IN')}</span>
+                      <span className="text-[10px] bg-[#6a2f8d] text-white px-2 py-0.5 border border-[#6a2f8d]">CVA ISSUED ✓</span>
+                    </div>
+                    <div className="text-[10px] text-[#1d161d] font-mono border-t border-[#6a2f8d]/30 pt-1.5 space-y-0.5">
+                      <p>● Cleanverse Token: <code>{agr.capitalPosition.cvaToken}</code></p>
+                      {agr.capitalPosition.txHash && (
+                        <p>● EVM Tx Hash: <code>{agr.capitalPosition.txHash.substring(0, 22)}...</code></p>
+                      )}
+                      {agr.capitalPosition.ruleV2 && (
+                        <p>● RuleV2 Compliance Policy: <span className="bg-[#6a2f8d] text-white px-1 py-0.2">minTier {agr.capitalPosition.ruleV2.minTier}+ | Country {agr.capitalPosition.ruleV2.countryBitmap}</span></p>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <button
