@@ -19,6 +19,7 @@ import {
   LogOut,
   Globe
 } from 'lucide-react';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { ethers } from 'ethers';
 
 interface Obligation {
@@ -327,35 +328,13 @@ export default function App() {
           </button>
         </div>
 
-        {/* EVM Wallet Connection Button & Network Indicators */}
-        <div className="flex items-center gap-3 text-xs font-mono font-medium">
-          {userAddress ? (
-            <div className="flex items-center gap-2 bg-[#f1e6f8] border-2 border-[#6a2f8d] p-1 text-[11px]">
-              <div className="px-2.5 py-1 bg-[#6a2f8d] text-white font-extrabold flex items-center gap-1.5">
-                <Wallet className="w-3.5 h-3.5" />
-                <span>{userAddress.substring(0, 6)}...{userAddress.substring(userAddress.length - 4)}</span>
-              </div>
-              {userBalance && (
-                <span className="font-bold text-[#6a2f8d] px-2">{userBalance}</span>
-              )}
-              <button 
-                onClick={disconnectWallet}
-                title="Disconnect Wallet"
-                className="p-1 hover:bg-rose-100 text-rose-700 transition"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={connectEVMWallet}
-              disabled={isConnectingWallet}
-              className="px-4 py-2 bg-[#1d161d] text-white font-extrabold text-xs uppercase border-2 border-[#1d161d] hover:bg-[#3a333a] transition rounded-none flex items-center gap-2"
-            >
-              <Wallet className="w-4 h-4 text-[#2f878d]" />
-              {isConnectingWallet ? 'Connecting Wallet...' : 'Connect EVM Wallet'}
-            </button>
-          )}
+        {/* RainbowKit EVM Wallet Connection Component */}
+        <div className="flex items-center gap-3 text-xs font-mono font-medium font-black">
+          <ConnectButton 
+            chainStatus="icon"
+            showBalance={true}
+            accountStatus="full"
+          />
         </div>
       </header>
 

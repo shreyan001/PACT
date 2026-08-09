@@ -4,6 +4,12 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    'process.env': {}
+  },
+  optimizeDeps: {
+    include: ['wagmi', 'viem', '@rainbow-me/rainbowkit', '@tanstack/react-query']
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '../../src')
