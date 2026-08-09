@@ -7,7 +7,7 @@ import {EncumbranceRegistry} from "./EncumbranceRegistry.sol";
 
 /**
  * @title PactAgreement
- * @notice PACT Commercial Agreement State Machine with Cleanverse Validator On-Chain Enforcement.
+ * @notice PACT Commercial Agreement State Machine with Cleanverse Validator onchain Enforcement.
  * @dev Enforces Indian Legal Shield Framework:
  *      - Factoring Regulation Act 2011 (Sec 7: Statutory Receivable Assignment)
  *      - Indian Contract Act 1872 (Sec 10 & Sec 2(d): Valid Barter Consideration for Digital Assets)

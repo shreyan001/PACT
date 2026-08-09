@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 async function runWebUITests() {
-  console.log('🧪 Running Web UI TDD Tests for Ticket 01...\n');
+  console.log('🧪 Running Web UI TDD Tests for Ticket 03...\n');
 
   const webDir = path.resolve(__dirname, '../../apps/web');
 
@@ -73,7 +73,16 @@ async function runWebUITests() {
   }
   console.log('✅ Test 6 Passed: Ticket 01 Dual Preset Contract Options Verified');
 
-  console.log('\n🎉 ALL WEB UI TDD TESTS FOR TICKET 01 PASSED SUCCESSFULLY!');
+  // Test 7: Verify Ticket 03 Financier Underwriting Yield & CVI Gating Pill
+  if (
+    !appContent.includes('Underwritten Yield APR:') ||
+    !appContent.includes('CVI Identity Gating:')
+  ) {
+    throw new Error('Test 7 Failed: Ticket 03 Financier Underwriting Yield & CVI Gating Pill missing from App.tsx');
+  }
+  console.log('✅ Test 7 Passed: Ticket 03 Financier Underwriting Yield & CVI Gating Pill Verified');
+
+  console.log('\n🎉 ALL WEB UI TDD TESTS FOR TICKET 03 PASSED SUCCESSFULLY!');
 }
 
 runWebUITests().catch(err => {

@@ -767,6 +767,19 @@ export default function App() {
                   </div>
                 </div>
 
+                <div className="p-3 bg-[#f1e6f8] rounded border border-[#6a2f8d]/30 flex items-center justify-between text-[11px]">
+                  <div>
+                    <span className="text-[#574e57]">Underwritten Yield APR:</span>
+                    <div className="font-extrabold text-[#6a2f8d] text-sm">
+                      {agr.inspectionCertificate ? '3.2% APR (Grade-A Discount)' : '3.8% APR (Standard Discount)'}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[#574e57]">CVI Identity Gating:</span>
+                    <div className="font-bold text-emerald-700">Tier {agr.buyer.cviTier}+ Verified ✓</div>
+                  </div>
+                </div>
+
                 {agr.inspectionCertificate && (
                   <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] space-y-1">
                     <p className="font-bold">🏢 Attached 3rd-Party Property Audit:</p>
