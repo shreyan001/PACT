@@ -31,7 +31,9 @@ import {
   TrendingUp,
   Award,
   ArrowUpRight,
-  PlusCircle
+  PlusCircle,
+  FileSearch,
+  CheckSquare
 } from 'lucide-react';
 
 interface Obligation {
@@ -104,19 +106,14 @@ export default function App() {
   const [creditState, setCreditState] = useState<CreditState | null>(null);
   const [allAgreements, setAllAgreements] = useState<AgreementWithCredit[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [compiling, setCompiling] = useState<boolean>(false);
-  const [compilationDone, setCompilationDone] = useState<boolean>(false);
-  const [activeScenario, setActiveScenario] = useState<'msme' | 'cre'>('msme');
 
-  // Borrower Custom Tokenization Form State
-  const [showCreateForm, setShowCreateForm] = useState<boolean>(false);
-  const [formTitle, setFormTitle] = useState<string>('Commercial Warehouse Lease Tokenization');
-  const [formSupplier, setFormSupplier] = useState<string>('Apex Logistics Infra Pvt Ltd');
-  const [formBuyer, setFormBuyer] = useState<string>('Amazon India Warehousing');
-  const [formTotalValue, setFormTotalValue] = useState<number>(6000000);
-  const [formMonthly, setFormMonthly] = useState<number>(500000);
-  const [formAuditor, setFormAuditor] = useState<string>('TUV SUD Structural Audits');
-  const [createSuccessNotice, setCreateSuccessNotice] = useState<string | null>(null);
+  // Borrower Demonstration Stepper State (Steps 1 to 4)
+  const [demoStep, setDemoStep] = useState<number>(1);
+  const [selectedPreset, setSelectedPreset] = useState<'msme' | 'cre'>('msme');
+  const [extractionProgress, setExtractionProgress] = useState<number>(0);
+  const [isExtracting, setIsExtracting] = useState<boolean>(false);
+  const [directoryChecked, setDirectoryChecked] = useState<boolean>(false);
+  const [tokenizedNotice, setTokenizedNotice] = useState<string | null>(null);
 
   const fetchActiveAgreement = async () => {
     try {
@@ -148,47 +145,52 @@ export default function App() {
     fetchAllAgreements();
   }, []);
 
-  const handleScenarioChange = async (scenario: 'msme' | 'cre') => {
-    setActiveScenario(scenario);
+  const handleSelectPreset = async (preset: 'msme' | 'cre') => {
+    setSelectedPreset(preset);
     setLoading(true);
     await fetch('/api/agreements/select-scenario', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenario })
+      body: JSON.stringify({ scenario: preset })
     });
     await fetchActiveAgreement();
     await fetchAllAgreements();
     setLoading(false);
+    setDemoStep(2); // Advance to Document Upload step
   };
 
-  const handleCreateAgreementSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await fetch('/api/agreements/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: formTitle,
-          supplierName: formSupplier,
-          buyerName: formBuyer,
-          totalValue: formTotalValue,
-          monthlyPayment: formMonthly,
-          inspectionAuditor: formAuditor,
-          scenarioKey: 'cre'
-        })
+  const handleStartExtraction = () => {
+    setIsExtracting(true);
+    setExtractionProgress(10);
+
+    const interval = setInterval(() => {
+      setExtractionProgress((prev) => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsExtracting(false);
+          setDemoStep(3); // Advance to Extracted Parameters & Clauses view
+          return 100;
+        }
+        return prev + 22;
       });
-      const data = await res.json();
-      if (data.success) {
-        setActiveAgreement(data.agreement);
-        setCreditState(data.creditState);
-        setCreateSuccessNotice(`Tokenized Agreement ${data.agreement.agreementId} persisted to Upstash Redis!`);
-        setShowCreateForm(false);
-        await fetchAllAgreements();
-      }
-    } catch (err) {
-      console.error('Error creating agreement:', err);
-    }
+    }, 300);
+  };
+
+  const handleRunDirectoryCheck = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setDirectoryChecked(true);
+      setDemoStep(4); // Advance to Backend Directory & CVI Verification step
+      setLoading(false);
+    }, 1000);
+  };
+
+  const handlePublishToMarketplace = async () => {
+    setLoading(true);
+    await fetch('/api/agreements/activate', { method: 'POST' });
+    await fetchActiveAgreement();
+    await fetchAllAgreements();
+    setTokenizedNotice(`Contract ${activeAgreement?.agreementId} tokenized, verified with Cleanverse CVI & published to Financier Marketplace!`);
     setLoading(false);
   };
 
@@ -232,14 +234,6 @@ export default function App() {
     setLoading(false);
   };
 
-  const handleRunAiCompiler = () => {
-    setCompiling(true);
-    setTimeout(() => {
-      setCompiling(false);
-      setCompilationDone(true);
-    }, 1200);
-  };
-
   return (
     <div className="jb-framed-container flex flex-col min-h-screen">
       
@@ -253,7 +247,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-xl tracking-tight text-[#1d161d]">PACT</span>
               <span className="text-[10px] font-mono font-semibold text-[#6a2f8d] bg-[#f1e6f8] px-2 py-0.5 rounded">
-                Upstash Redis Protocol
+                v2.0 Protocol
               </span>
             </div>
             <p className="text-[11px] text-[#574e57]">Contract-to-Capital Infrastructure</p>
@@ -276,7 +270,7 @@ export default function App() {
               viewMode === 'creator' ? 'bg-[#6a2f8d] text-white shadow-sm' : 'text-[#574e57] hover:text-[#1d161d]'
             }`}
           >
-            Borrower Portal
+            Borrower Demo Portal
           </button>
           <button
             onClick={() => { fetchAllAgreements(); setViewMode('financier'); }}
@@ -288,11 +282,11 @@ export default function App() {
           </button>
         </div>
 
-        {/* Network & Redis Indicators */}
+        {/* Network Indicators */}
         <div className="hidden lg:flex items-center gap-3 text-xs font-mono font-medium">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px]">
             <Database className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Upstash Redis Connected</span>
+            <span>Upstash Redis Persistence</span>
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-[#f1e6f8] text-[#6a2f8d] border border-[#6a2f8d]/30 text-[11px]">
             <Building2 className="w-3.5 h-3.5" />
@@ -309,7 +303,7 @@ export default function App() {
             <div className="max-w-4xl space-y-6">
               <div className="flex items-center gap-3">
                 <span className="px-3 py-1 rounded bg-white/20 text-white font-mono text-xs font-bold uppercase tracking-wider backdrop-blur">
-                  Upstash Redis Real-Time Pipeline
+                  Official Cleanverse Compliance Protocol Architecture
                 </span>
                 <span className="jb-match-green shadow">
                   100% CVI VERIFIED
@@ -321,7 +315,7 @@ export default function App() {
               </h1>
 
               <p className="text-lg text-white/90 leading-relaxed font-normal max-w-3xl">
-                Borrowers tokenize contracts with verified inspection proofs $\rightarrow$ Financiers underwrite credit and disburse CVA capital positions in real time via Upstash Redis.
+                Borrowers tokenize contracts with verified inspection proofs $\rightarrow$ Financiers underwrite credit and disburse CVA capital positions in real time.
               </p>
 
               <div className="flex items-center gap-4 pt-4">
@@ -329,7 +323,7 @@ export default function App() {
                   onClick={() => setViewMode('creator')}
                   className="jb-btn-light px-6 py-3.5 text-xs bg-white text-[#1d161d] font-extrabold hover:bg-[#f8f6f8]"
                 >
-                  ENTER BORROWER PORTAL <ArrowRight className="w-4 h-4 ml-1" />
+                  ENTER BORROWER DEMO PORTAL <ArrowRight className="w-4 h-4 ml-1" />
                 </button>
                 <button 
                   onClick={() => { fetchAllAgreements(); setViewMode('financier'); }}
@@ -370,133 +364,291 @@ export default function App() {
         </main>
       )}
 
-      {/* 3. BORROWER PORTAL */}
+      {/* 3. BORROWER DEMONSTRATION PORTAL */}
       {viewMode === 'creator' && (
         <main className="flex-1 bg-[#f8f6f8] p-8 space-y-8">
           
-          {/* Success Notification Banner */}
-          {createSuccessNotice && (
-            <div className="p-4 rounded bg-emerald-100 border border-emerald-300 text-emerald-900 font-mono text-xs flex items-center justify-between">
+          {/* Notification Banner */}
+          {tokenizedNotice && (
+            <div className="p-4 rounded bg-emerald-100 border border-emerald-300 text-emerald-900 font-mono text-xs flex items-center justify-between shadow-sm">
               <span className="flex items-center gap-2 font-bold">
                 <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                {createSuccessNotice}
+                {tokenizedNotice}
               </span>
-              <button onClick={() => setCreateSuccessNotice(null)} className="text-xs font-bold underline">Dismiss</button>
+              <button onClick={() => setTokenizedNotice(null)} className="text-xs font-bold underline">Dismiss</button>
             </div>
           )}
 
-          {/* Borrower Workspace Header */}
-          <div className="bg-white p-6 rounded-lg border border-[#e7e4e7] shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="jb-category-pill">BORROWER PORTAL</span>
-                <span className="text-xs font-mono font-bold text-[#6a2f8d] bg-[#f1e6f8] px-2.5 py-0.5 rounded">
-                  {activeAgreement?.agreementId}
-                </span>
+          {/* Stepper Header Bar */}
+          <div className="bg-white p-6 rounded-lg border border-[#e7e4e7] shadow-sm space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <span className="jb-category-pill">BORROWER TOKENIZATION DEMO WORKFLOW</span>
+                <h2 className="text-2xl font-extrabold text-[#1d161d] mt-1">
+                  Contract Upload, AI Clause Extraction & Compliance Gating
+                </h2>
               </div>
-              <h2 className="text-2xl font-extrabold text-[#1d161d]">
-                {activeAgreement?.title}
-              </h2>
+
+              <div className="flex items-center gap-2 font-mono text-xs">
+                <button
+                  onClick={() => handleSelectPreset('msme')}
+                  className={`px-3 py-2 rounded font-bold border transition ${
+                    selectedPreset === 'msme' 
+                      ? 'bg-[#6a2f8d] text-white border-[#6a2f8d]' 
+                      : 'bg-white text-[#574e57] border-[#e7e4e7] hover:border-[#6a2f8d]'
+                  }`}
+                >
+                  Option 1: MSME Supply Agreement
+                </button>
+                <button
+                  onClick={() => handleSelectPreset('cre')}
+                  className={`px-3 py-2 rounded font-bold border transition ${
+                    selectedPreset === 'cre' 
+                      ? 'bg-[#2f878d] text-white border-[#2f878d]' 
+                      : 'bg-white text-[#574e57] border-[#e7e4e7] hover:border-[#2f878d]'
+                  }`}
+                >
+                  Option 2: Commercial CRE Lease
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowCreateForm(!showCreateForm)}
-                className="jb-btn-dark bg-[#6a2f8d] border-[#6a2f8d]"
-              >
-                <PlusCircle className="w-4 h-4" />
-                {showCreateForm ? 'Cancel Tokenization' : 'Tokenize New Custom Contract'}
-              </button>
+            {/* Stepper Progress Indicator */}
+            <div className="grid grid-cols-4 gap-2 pt-2 border-t border-[#e7e4e7] font-mono text-xs">
+              <div className={`p-2.5 rounded text-center font-bold border transition ${
+                demoStep === 1 ? 'bg-[#6a2f8d] text-white border-[#6a2f8d]' : 'bg-[#f8f6f8] text-[#574e57] border-[#e7e4e7]'
+              }`}>
+                1. Select Preset Contract
+              </div>
+              <div className={`p-2.5 rounded text-center font-bold border transition ${
+                demoStep === 2 ? 'bg-[#6a2f8d] text-white border-[#6a2f8d]' : 'bg-[#f8f6f8] text-[#574e57] border-[#e7e4e7]'
+              }`}>
+                2. PDF Document Upload
+              </div>
+              <div className={`p-2.5 rounded text-center font-bold border transition ${
+                demoStep === 3 ? 'bg-[#6a2f8d] text-white border-[#6a2f8d]' : 'bg-[#f8f6f8] text-[#574e57] border-[#e7e4e7]'
+              }`}>
+                3. AI Clause Extraction
+              </div>
+              <div className={`p-2.5 rounded text-center font-bold border transition ${
+                demoStep === 4 ? 'bg-[#6a2f8d] text-white border-[#6a2f8d]' : 'bg-[#f8f6f8] text-[#574e57] border-[#e7e4e7]'
+              }`}>
+                4. Compliance Gating & Publish
+              </div>
             </div>
           </div>
 
-          {/* Custom Borrower Creation Form */}
-          {showCreateForm && (
-            <form onSubmit={handleCreateAgreementSubmit} className="bg-white p-6 rounded-lg border border-[#6a2f8d] shadow-md space-y-4">
-              <div className="flex items-center justify-between border-b border-[#e7e4e7] pb-3">
-                <h3 className="text-sm font-extrabold text-[#1d161d] uppercase tracking-wider flex items-center gap-2">
-                  <PlusCircle className="w-4 h-4 text-[#6a2f8d]" />
-                  Tokenize New Contract & Persist to Upstash Redis
+          {/* STEP 1: PRESET SELECTION BOXES */}
+          {demoStep === 1 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Option 1 Box */}
+              <div 
+                onClick={() => handleSelectPreset('msme')}
+                className="bg-white p-6 rounded-lg border border-[#e7e4e7] hover:border-[#6a2f8d] shadow-sm transition cursor-pointer space-y-4 group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="jb-category-pill">OPTION 1: MSME AUTOMOTIVE SUPPLY</span>
+                  <span className="text-xs font-bold font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">
+                    Factoring Act Sec 7
+                  </span>
+                </div>
+
+                <h3 className="text-xl font-extrabold text-[#1d161d] group-hover:text-[#6a2f8d]">
+                  Indian MSME Automotive Parts Supply Agreement
                 </h3>
-                <span className="jb-category-pill">Real-Time Redis Persistence</span>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
-                <div>
-                  <label className="font-bold text-[#1d161d] uppercase block mb-1">Contract Title</label>
-                  <input
-                    type="text"
-                    value={formTitle}
-                    onChange={(e) => setFormTitle(e.target.value)}
-                    className="w-full p-2.5 border border-[#e7e4e7] rounded bg-[#f8f6f8] text-[#1d161d]"
-                    required
-                  />
+                <p className="text-xs text-[#574e57] leading-relaxed">
+                  Supplier: <strong>ABC Components Pvt Ltd</strong> $\leftrightarrow$ Buyer: <strong>LargeCorp / TATA India</strong>. Total Value: ₹1.2 Crore across 12 monthly deliveries of ₹1,000,000 each.
+                </p>
+
+                <div className="p-3 bg-[#f8f6f8] rounded font-mono text-xs space-y-1 text-[#1d161d]">
+                  <p>● Buyer Credit: <strong>Top-Tier TATA Automotive (CVI Tier 50)</strong></p>
+                  <p>● Legal Wrapper: <strong>PACT-IN-1 (Factoring Regulation Act Sec 7)</strong></p>
                 </div>
 
-                <div>
-                  <label className="font-bold text-[#1d161d] uppercase block mb-1">Borrower / Assignor Name</label>
-                  <input
-                    type="text"
-                    value={formSupplier}
-                    onChange={(e) => setFormSupplier(e.target.value)}
-                    className="w-full p-2.5 border border-[#e7e4e7] rounded bg-[#f8f6f8] text-[#1d161d]"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-[#1d161d] uppercase block mb-1">Buyer / Tenant Name</label>
-                  <input
-                    type="text"
-                    value={formBuyer}
-                    onChange={(e) => setFormBuyer(e.target.value)}
-                    className="w-full p-2.5 border border-[#e7e4e7] rounded bg-[#f8f6f8] text-[#1d161d]"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-[#1d161d] uppercase block mb-1">Total Contract Value (₹)</label>
-                  <input
-                    type="number"
-                    value={formTotalValue}
-                    onChange={(e) => setFormTotalValue(Number(e.target.value))}
-                    className="w-full p-2.5 border border-[#e7e4e7] rounded bg-[#f8f6f8] text-[#1d161d]"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-[#1d161d] uppercase block mb-1">Monthly Payment Claim (₹)</label>
-                  <input
-                    type="number"
-                    value={formMonthly}
-                    onChange={(e) => setFormMonthly(Number(e.target.value))}
-                    className="w-full p-2.5 border border-[#e7e4e7] rounded bg-[#f8f6f8] text-[#1d161d]"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-[#1d161d] uppercase block mb-1">3rd-Party Structural Auditor</label>
-                  <input
-                    type="text"
-                    value={formAuditor}
-                    onChange={(e) => setFormAuditor(e.target.value)}
-                    className="w-full p-2.5 border border-[#e7e4e7] rounded bg-[#f8f6f8] text-[#1d161d]"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-[#e7e4e7] flex items-center justify-end">
-                <button type="submit" disabled={loading} className="jb-btn-dark bg-[#6a2f8d]">
-                  {loading ? 'Submitting to Redis...' : 'Tokenize & Publish to Financier Marketplace'}
+                <button className="jb-btn-dark w-full justify-center bg-[#6a2f8d] border-[#6a2f8d]">
+                  Select Option 1 & Upload PDF Document →
                 </button>
               </div>
-            </form>
+
+              {/* Option 2 Box */}
+              <div 
+                onClick={() => handleSelectPreset('cre')}
+                className="bg-white p-6 rounded-lg border border-[#e7e4e7] hover:border-[#2f878d] shadow-sm transition cursor-pointer space-y-4 group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="jb-category-pill">OPTION 2: COMMERCIAL CRE LEASE</span>
+                  <span className="text-xs font-bold font-mono text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200">
+                    3rd Renewal + Bureau Veritas
+                  </span>
+                </div>
+
+                <h3 className="text-xl font-extrabold text-[#1d161d] group-hover:text-[#2f878d]">
+                  Bangalore Commercial Real Estate Lease Tokenization
+                </h3>
+
+                <p className="text-xs text-[#574e57] leading-relaxed">
+                  Property Owner: <strong>Vanguard Commercial Realty</strong> $\leftrightarrow$ Tenant: <strong>Nexus Tech Solutions</strong>. ₹36 Lakh 3-year commercial rental income stream with Bureau Veritas 3rd-party structural inspection certificate attached.
+                </p>
+
+                <div className="p-3 bg-[#f8f6f8] rounded font-mono text-xs space-y-1 text-[#1d161d]">
+                  <p>● Stability History: <strong>3rd Contract Renewal Tenure</strong></p>
+                  <p>● Property Audit: <strong>Bureau Veritas Grade-A Certificate</strong></p>
+                  <p>● Legal Wrapper: <strong>PACT-CRE-1 (Commercial Lease Assignment)</strong></p>
+                </div>
+
+                <button className="jb-btn-dark w-full justify-center bg-[#2f878d] border-[#2f878d]">
+                  Select Option 2 & Upload PDF Document →
+                </button>
+              </div>
+            </div>
           )}
 
-          {/* Onchain Lifecycle Actions */}
+          {/* STEP 2: PDF DOCUMENT UPLOAD & EXTRACTION RUNNER */}
+          {demoStep === 2 && (
+            <div className="bg-white p-6 rounded-lg border border-[#e7e4e7] shadow-sm space-y-6 max-w-4xl mx-auto">
+              <div className="flex items-center justify-between border-b border-[#e7e4e7] pb-3">
+                <h3 className="text-sm font-extrabold text-[#1d161d] uppercase tracking-wider flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-[#6a2f8d]" />
+                  Preset Legal Contract PDF Ingestion Viewer
+                </h3>
+                <span className="jb-category-pill">Step 2 of 4</span>
+              </div>
+
+              <div className="p-8 border-2 border-dashed border-[#6a2f8d]/40 rounded-lg bg-[#f1e6f8]/30 text-center space-y-4">
+                <FileSearch className="w-12 h-12 text-[#6a2f8d] mx-auto animate-bounce" />
+                <div>
+                  <p className="text-base font-extrabold text-[#1d161d]">
+                    {selectedPreset === 'msme' ? 'signed_msme_supply_agreement.pdf' : 'signed_commercial_lease_agreement.pdf'}
+                  </p>
+                  <p className="text-xs font-mono text-[#574e57] mt-1">
+                    SHA256 Hash: <code>{activeAgreement?.agreementHash}</code> • Uploaded Timestamp: Just Now
+                  </p>
+                </div>
+
+                {isExtracting ? (
+                  <div className="max-w-md mx-auto space-y-2">
+                    <div className="w-full bg-[#e7e4e7] h-3 rounded-full overflow-hidden">
+                      <div className="bg-[#6a2f8d] h-full transition-all duration-300" style={{ width: `${extractionProgress}%` }}></div>
+                    </div>
+                    <p className="text-xs font-mono font-bold text-[#6a2f8d]">
+                      Extracting Clauses & Parameters ({extractionProgress}%)...
+                    </p>
+                  </div>
+                ) : (
+                  <button onClick={handleStartExtraction} className="jb-btn-dark bg-[#6a2f8d] border-[#6a2f8d]">
+                    <Cpu className="w-4 h-4" />
+                    Start AI Clause & Risk Extraction Pipeline
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: EXTRACTED CLAUSES & PARAMETERS VIEW */}
+          {demoStep === 3 && (
+            <div className="bg-white p-6 rounded-lg border border-[#e7e4e7] shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-[#e7e4e7] pb-3">
+                <h3 className="text-sm font-extrabold text-[#1d161d] uppercase tracking-wider flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-[#6a2f8d]" />
+                  AI Extracted Contract Clauses, Parameters & Audit Evidence
+                </h3>
+                <span className="jb-category-pill">Step 3 of 4</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs font-mono">
+                {/* Parameters Card */}
+                <div className="p-4 rounded bg-[#f8f6f8] border border-[#e7e4e7] space-y-3">
+                  <span className="text-[10px] font-bold text-[#6a2f8d] uppercase block border-b border-[#e7e4e7] pb-1">
+                    1. Extracted Contract Parameters
+                  </span>
+                  <p>● Agreement ID: <strong>{activeAgreement?.agreementId}</strong></p>
+                  <p>● Title: <strong>{activeAgreement?.title}</strong></p>
+                  <p>● Assignor/Borrower: <strong>{activeAgreement?.supplier.name}</strong></p>
+                  <p>● Obligor/Buyer: <strong>{activeAgreement?.buyer.name}</strong></p>
+                  <p>● Total Value: <strong className="text-[#6a2f8d]">₹{activeAgreement?.totalValue.toLocaleString('en-IN')}</strong></p>
+                  <p>● Monthly Claim: <strong>₹{activeAgreement?.obligations[0]?.amount.toLocaleString('en-IN')} / mo</strong></p>
+                </div>
+
+                {/* Risk Clauses Card */}
+                <div className="p-4 rounded bg-[#f8f6f8] border border-[#e7e4e7] space-y-3">
+                  <span className="text-[10px] font-bold text-[#6a2f8d] uppercase block border-b border-[#e7e4e7] pb-1">
+                    2. Risk Clauses & Proof Attachments
+                  </span>
+                  <p>● Legal Wrapper: <code>{activeAgreement?.legalWrapper}</code></p>
+                  <p>● Payment Terms: <strong>30 Days Net Post-Acceptance</strong></p>
+                  {activeAgreement?.inspectionCertificate ? (
+                    <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
+                      <p className="font-bold">🏢 Attached 3rd-Party Property Audit:</p>
+                      <p>● Auditor: {activeAgreement.inspectionCertificate.auditor}</p>
+                      <p>● Condition: {activeAgreement.inspectionCertificate.conditionRating}</p>
+                      <p>● Report Hash: <code>{activeAgreement.inspectionCertificate.reportHash.substring(0, 16)}...</code></p>
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded bg-[#f1e6f8] text-[#6a2f8d]">
+                      ● Buyer Credit Rating: Top-Tier TATA Automotive (CVI Tier 50)
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between border-t border-[#e7e4e7]">
+                <button onClick={() => setDemoStep(2)} className="jb-btn-light">
+                  ← Back to PDF Upload
+                </button>
+                <button onClick={handleRunDirectoryCheck} disabled={loading} className="jb-btn-dark bg-[#2f878d] border-[#2f878d]">
+                  {loading ? 'Checking Directories...' : 'Verify Backend Directory & CVI Gating →'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: BACKEND DIRECTORY CHECKS & PUBLISH */}
+          {demoStep === 4 && (
+            <div className="bg-white p-6 rounded-lg border border-[#e7e4e7] shadow-sm space-y-6 max-w-4xl mx-auto">
+              <div className="flex items-center justify-between border-b border-[#e7e4e7] pb-3">
+                <h3 className="text-sm font-extrabold text-[#1d161d] uppercase tracking-wider flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-[#6a2f8d]" />
+                  Backend Directory & Cleanverse CVI Compliance Gating
+                </h3>
+                <span className="jb-category-pill">Step 4 of 4</span>
+              </div>
+
+              <div className="p-4 rounded bg-[#f8f6f8] border border-[#e7e4e7] space-y-4 text-xs font-mono">
+                <div className="flex items-center justify-between border-b border-[#e7e4e7] pb-2">
+                  <span className="font-bold text-[#1d161d]">1. Cleanverse CVI Identity Directory Check</span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                    TIER 30+ VERIFIED ✓
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between border-b border-[#e7e4e7] pb-2">
+                  <span className="font-bold text-[#1d161d]">2. IAPassComplianceValidator Pool Registration</span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                    REGISTERED ✓
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[#1d161d]">3. EncumbranceRegistry Anti-Double-Financing Guard</span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                    UNENCUMBERED ✓
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between border-t border-[#e7e4e7]">
+                <button onClick={() => setDemoStep(3)} className="jb-btn-light">
+                  ← Back to Extracted Clauses
+                </button>
+                <button onClick={handlePublishToMarketplace} disabled={loading} className="jb-btn-dark bg-[#6a2f8d] border-[#6a2f8d]">
+                  {loading ? 'Publishing...' : 'Tokenize & Publish to Financier Marketplace 🚀'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Onchain Lifecycle Console */}
           <div className="bg-white p-6 rounded-lg border border-[#e7e4e7] shadow-sm space-y-3">
             <div className="flex items-center justify-between border-b border-[#e7e4e7] pb-2">
               <h3 className="text-xs font-extrabold text-[#1d161d] uppercase tracking-wider flex items-center gap-2">
@@ -614,6 +766,14 @@ export default function App() {
                     <div className="font-bold text-[#2f878d]">{cs.performanceReliability} / 100</div>
                   </div>
                 </div>
+
+                {agr.inspectionCertificate && (
+                  <div className="p-2.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] space-y-1">
+                    <p className="font-bold">🏢 Attached 3rd-Party Property Audit:</p>
+                    <p>● Auditor: {agr.inspectionCertificate.auditor}</p>
+                    <p>● Report Hash: <code>{agr.inspectionCertificate.reportHash.substring(0, 14)}...</code></p>
+                  </div>
+                )}
 
                 {agr.capitalPosition ? (
                   <div className="p-3 bg-[#f1e6f8] rounded text-[#6a2f8d] font-bold flex items-center justify-between">
